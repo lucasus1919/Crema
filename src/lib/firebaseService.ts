@@ -248,7 +248,10 @@ export async function placeOrderTransaction(params: {
         const snap = await tx.get(inv.ref);
         if (snap.exists()) {
           const current = Number(snap.data().currentStock ?? 0);
-          const updated = Math.max(0, current - inv.amount);
+          if (current < inv.amount) {
+            throw new Error(`Insufficient stock for ingredient ${inv.ref.id}: requires ${inv.amount}, only ${current} available`);
+          }
+          const updated = current - inv.amount;
           inventoryReads.push({ ref: inv.ref, updatedStock: updated });
         }
       }

@@ -3,6 +3,16 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import type { Order, OrderItem, Coupon, MenuItem } from '@/types';
 import * as fbService from '@/lib/firebaseService';
+import {
+  calculateSubtotal,
+  calculateDiscount,
+  calculateTotal,
+  validateCoupon,
+  generateOrderNumber,
+  addItemToCart,
+  removeItemFromCart,
+  updateCartItemQuantity,
+} from '@/lib/calculations';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -56,40 +66,17 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
   }, [appUser?.role, appUser?.id, appUser]);
 
   const addToCart = useCallback((menuItem: MenuItem, quantity = 1) => {
-    setCart((prev) => {
-      const existing = prev.find((i) => i.menuItemId === menuItem.id);
-      if (existing) {
-        return prev.map((i) =>
-          i.menuItemId === menuItem.id ? { ...i, quantity: i.quantity + quantity } : i
-        );
-      }
-      return [
-        ...prev,
-        {
-          menuItemId: menuItem.id,
-          name: menuItem.name,
-          quantity,
-          unitPrice: menuItem.price,
-          subtotal: menuItem.price * quantity,
-        },
-      ];
-    });
+    setCart((prev) => addItemToCart(prev, menuItem, quantity));
     showToast(`Added ${menuItem.name} to cart`, 'info');
   }, [showToast]);
 
   const removeFromCart = useCallback((menuItemId: string) => {
-    setCart((prev) => prev.filter((i) => i.menuItemId !== menuItemId));
+    setCart((prev) => removeItemFromCart(prev, menuItemId));
   }, []);
 
   const updateQuantity = useCallback((menuItemId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(menuItemId);
-      return;
-    }
-    setCart((prev) =>
-      prev.map((i) => (i.menuItemId === menuItemId ? { ...i, quantity } : i))
-    );
-  }, [removeFromCart]);
+    setCart((prev) => updateCartItemQuantity(prev, menuItemId, quantity));
+  }, []);
 
   const clearCart = useCallback(() => {
     setCart([]);
@@ -99,25 +86,14 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
   const applyCouponCode = async (code: string): Promise<boolean> => {
     try {
       const coupon = await fbService.getCouponByCode(code.trim().toUpperCase());
-      if (!coupon) {
-        showToast('Invalid coupon code', 'error');
-        return false;
-      }
-      if (!coupon.active) {
-        showToast('This coupon is no longer active', 'error');
-        return false;
-      }
-      if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) {
-        showToast('This coupon has expired', 'error');
-        return false;
-      }
-      if (coupon.maxUses && (coupon.usedCount ?? 0) >= coupon.maxUses) {
-        showToast('This coupon has reached its maximum uses', 'error');
+      const validation = validateCoupon(coupon);
+      if (!validation.valid) {
+        showToast(validation.error || 'Invalid coupon', 'error');
         return false;
       }
 
       setAppliedCoupon(coupon);
-      showToast(`Coupon "${coupon.code}" applied!`, 'success');
+      showToast(`Coupon "${coupon?.code}" applied!`, 'success');
       return true;
     } catch {
       showToast('Error validating coupon', 'error');
@@ -131,19 +107,15 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
   };
 
   const subtotal = useMemo(() => {
-    return cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    return calculateSubtotal(cart);
   }, [cart]);
 
   const discountAmount = useMemo(() => {
-    if (!appliedCoupon) return 0;
-    if (appliedCoupon.discountType === 'percent') {
-      return (subtotal * appliedCoupon.discountValue) / 100;
-    }
-    return Math.min(subtotal, appliedCoupon.discountValue);
+    return calculateDiscount(subtotal, appliedCoupon);
   }, [subtotal, appliedCoupon]);
 
   const total = useMemo(() => {
-    return Math.max(0, subtotal - discountAmount);
+    return calculateTotal(subtotal, discountAmount);
   }, [subtotal, discountAmount]);
 
   const checkout = async (paymentMethod = 'cash'): Promise<string> => {
@@ -152,7 +124,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
+      const orderNumber = generateOrderNumber();
       const coffeeItemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
 
       const orderData: Omit<Order, 'id'> = {
