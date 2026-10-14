@@ -18,7 +18,7 @@ interface AuthContextType {
   appUser: AppUser | null;
   loading: boolean;
   signIn: (email: string, pass: string) => Promise<AppUser>;
-  signUp: (email: string, pass: string, name: string, role?: 'admin' | 'customer') => Promise<AppUser>;
+  signUp: (email: string, pass: string, name: string) => Promise<AppUser>;
   signOut: () => Promise<void>;
   refreshAppUser: () => Promise<void>;
 }
@@ -114,8 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (
     email: string,
     pass: string,
-    name: string,
-    role: 'admin' | 'customer' = 'customer'
+    name: string
   ): Promise<AppUser> => {
     setLoading(true);
     try {
@@ -128,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: cred.user.uid,
         name,
         email,
-        role,
+        role: 'customer',
         loyaltyPoints: 0,
         freeItemReady: false,
         orderFrequency: {},

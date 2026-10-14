@@ -1,0 +1,13 @@
+.git
+node_modules
+.next
+coverage
+.env*
+tests
+docs
+Dockerfile*
+docker-compose*.yml
+README.md
+vitest.config.*
+.eslintrc*
+eslint.config.*

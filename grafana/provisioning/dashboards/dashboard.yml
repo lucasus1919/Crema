@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: 'Crema POS Dashboards'
+    orgId: 1
+    folder: 'Crema Monitoring'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

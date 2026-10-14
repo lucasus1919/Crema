@@ -1,0 +1,88 @@
+name: Deploy Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,prefix=sha-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyAIXAiNC0qKQDkt5G-XaQj0hFAN4MCrEl8' }}
+            NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID || '1:369807633070:web:b0cf0378d9ee167154db3f' }}
+            NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '369807633070' }}
+            NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'coffee-1919' }}
+            NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'coffee-1919.firebaseapp.com' }}
+            NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'coffee-1919.firebasestorage.app' }}
+            NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || 'G-45HZ2TR4TK' }}
+
+  deploy:
+    name: Deploy to Production VM
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy via SSH (Templated)
+        run: |
+          echo "=========================================================="
+          echo "Production deployment step configured for GHCR."
+          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "To enable automatic VM deployment, configure repository secrets:"
+          echo "  - DEPLOY_HOST (VM IP or domain)"
+          echo "  - DEPLOY_USER (SSH user)"
+          echo "  - DEPLOY_KEY  (Private SSH key)"
+          echo "  - DEPLOY_PATH (Target directory on VM)"
+          echo "=========================================================="
+        # Example ssh step to activate once secrets are added:
+        # uses: appleboy/ssh-action@v1.0.3
+        # with:
+        #   host: ${{ secrets.DEPLOY_HOST }}
+        #   username: ${{ secrets.DEPLOY_USER }}
+        #   key: ${{ secrets.DEPLOY_KEY }}
+        #   script: |
+        #     cd ${{ secrets.DEPLOY_PATH }}
+        #     docker-compose pull
+        #     docker-compose up -d --remove-orphans

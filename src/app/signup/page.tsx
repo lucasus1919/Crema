@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Coffee, Mail, Lock, User, UserCheck } from 'lucide-react';
+import { Coffee, Mail, Lock, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { Button } from '@/components/ui/Button';
@@ -18,7 +18,6 @@ export default function SignupPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'customer' | 'admin'>('customer');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,13 +35,9 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const profile = await signUp(email.trim(), password, name.trim(), role);
+      const profile = await signUp(email.trim(), password, name.trim());
       showToast(`Welcome to Crema, ${profile.name}!`, 'success');
-      if (profile.role === 'admin') {
-        router.push('/admin/dashboard');
-      } else {
-        router.push('/customer/menu');
-      }
+      router.push('/customer/menu');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration failed';
       setError(msg);
@@ -146,65 +141,6 @@ export default function SignupPage() {
               icon={<Lock size={18} />}
               required
             />
-
-            <div>
-              <label
-                style={{
-                  fontSize: '0.85rem',
-                  fontWeight: 500,
-                  color: 'rgba(245, 230, 211, 0.8)',
-                  display: 'block',
-                  marginBottom: '8px',
-                  fontFamily: 'var(--font-heading)',
-                }}
-              >
-                Account Role
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setRole('customer')}
-                  style={{
-                    padding: '10px',
-                    borderRadius: '10px',
-                    border: role === 'customer' ? '2px solid #D4A574' : '1px solid rgba(78, 52, 46, 0.8)',
-                    background: role === 'customer' ? 'rgba(212, 165, 116, 0.15)' : '#24140E',
-                    color: '#F5E6D3',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    fontSize: '0.85rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  <Coffee size={16} color={role === 'customer' ? '#D4A574' : 'rgba(245, 230, 211, 0.5)'} />
-                  Customer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('admin')}
-                  style={{
-                    padding: '10px',
-                    borderRadius: '10px',
-                    border: role === 'admin' ? '2px solid #D4A574' : '1px solid rgba(78, 52, 46, 0.8)',
-                    background: role === 'admin' ? 'rgba(212, 165, 116, 0.15)' : '#24140E',
-                    color: '#F5E6D3',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    fontSize: '0.85rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  <UserCheck size={16} color={role === 'admin' ? '#D4A574' : 'rgba(245, 230, 211, 0.5)'} />
-                  Admin / Staff
-                </button>
-              </div>
-            </div>
 
             <Button
               type="submit"
