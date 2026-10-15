@@ -154,17 +154,89 @@ nodejs_heap_used_bytes 38068856
 nodejs_heap_total_bytes 40697856
 ```
 
-### 3.3 Prometheus Configuration (`prometheus/prometheus.yml`)
-- Scrape interval: `10s`
-- Target: `crema-web:3000`
+### 3.3 Prometheus Configuration & Scraper Verification (`prometheus/prometheus.yml`)
+- Scrape interval: `10s` (configured in `docker-compose.yml`) / `5s` (runtime verification)
+- Target: `crema-web:3000` (container network) / `localhost:3000` (host verification)
 - Scrape path: `/api/metrics`
+- Scrape Status: **`health: "up"`**, `lastError: ""`
 
-### 3.4 Grafana Dashboard (`grafana/provisioning/dashboards/crema-dashboard.json`)
-Pre-configured panels include:
-- **Application Uptime**: Gauge visualizing `process_uptime_seconds`.
-- **Total Requests**: Single stat counter tracking `sum(http_requests_total)`.
-- **Heap Memory Usage**: Time-series graph comparing `nodejs_heap_used_bytes` vs `nodejs_heap_total_bytes`.
-- **Request Volume by Route**: Breakdown graph for `http_requests_total` grouped by path and HTTP method.
+Live target verification from Prometheus API (`/api/v1/targets`):
+```json
+{
+  "discoveredLabels": {
+    "__address__": "localhost:3000",
+    "__metrics_path__": "/api/metrics",
+    "job": "crema-web"
+  },
+  "labels": { "instance": "localhost:3000", "job": "crema-web" },
+  "scrapeUrl": "http://localhost:3000/api/metrics",
+  "health": "up",
+  "lastError": "",
+  "lastScrapeDuration": 0.0064
+}
+```
+
+Live vector query response from Prometheus (`/api/v1/query?query=http_requests_total`):
+```json
+{
+  "status": "success",
+  "data": {
+    "resultType": "vector",
+    "result": [
+      {
+        "metric": {
+          "__name__": "http_requests_total",
+          "job": "crema-web",
+          "method": "GET",
+          "path": "/api/health",
+          "status": "200"
+        },
+        "value": [1792026600.287, "6"]
+      },
+      {
+        "metric": {
+          "__name__": "http_requests_total",
+          "job": "crema-web",
+          "method": "GET",
+          "path": "/api/metrics",
+          "status": "200"
+        },
+        "value": [1792026600.287, "60"]
+      }
+    ]
+  }
+}
+```
+
+### 3.4 Grafana Dashboard Live Provisioning (`grafana/provisioning/dashboards/crema-dashboard.json`)
+Grafana v10.3.3 auto-provisioning verified on port `3001`:
+- **Datasource**: Prometheus at `http://localhost:9090` automatically registered (`uid: PBFA97CFB590B2093`, `isDefault: true`).
+- **Dashboard**: `Crema POS Application Overview` (`uid: crema-pos-overview`) in folder `Crema Monitoring`.
+- **Panels Verified Active & Receiving Live Metrics**:
+  1. **Application Uptime**: `expr: process_uptime_seconds` (stat panel)
+  2. **Total HTTP Requests**: `expr: sum(http_requests_total) or vector(0)` (stat panel, verified returning live counts)
+  3. **Heap Memory Usage**: `expr: nodejs_heap_used_bytes` / `nodejs_heap_total_bytes` (timeseries panel, verified reporting ~43MB heap)
+  4. **HTTP Request Volume by Path**: `expr: http_requests_total` (timeseries breakdown by `{method, path, status}`)
+
+Live query through Grafana Proxy (`/api/datasources/proxy/1/api/v1/query?query=nodejs_heap_used_bytes`):
+```json
+{
+  "status": "success",
+  "data": {
+    "resultType": "vector",
+    "result": [
+      {
+        "metric": {
+          "__name__": "nodejs_heap_used_bytes",
+          "instance": "localhost:3000",
+          "job": "crema-web"
+        },
+        "value": [1792026536.87, "43043928"]
+      }
+    ]
+  }
+}
+```
 
 ---
 
